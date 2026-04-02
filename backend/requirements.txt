@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-multipart
+httpx
+pandas
+openpyxl
+xlrd
+statsmodels
+chronos-forecasting
+torch
+numpy
