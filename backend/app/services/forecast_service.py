@@ -31,7 +31,20 @@ def _round_list(values: Iterable[float]) -> List[float]:
     return [round(float(value), 6) for value in values]
 
 
-def compute_metrics(actual: np.ndarray, forecast: Iterable[float]) -> Dict[str, float | None]:
+def _compute_mase_scale(train: np.ndarray) -> float | None:
+    train_arr = np.asarray(train, dtype=float)
+    if len(train_arr) < 2:
+        return None
+
+    naive_errors = np.abs(np.diff(train_arr))
+    scale = float(np.mean(naive_errors))
+    if not np.isfinite(scale) or scale <= 0:
+        return None
+
+    return scale
+
+
+def compute_metrics(actual: np.ndarray, forecast: Iterable[float], train: np.ndarray | None = None) -> Dict[str, float | None]:
     actual_arr = np.asarray(actual, dtype=float)
     forecast_arr = np.asarray(list(forecast), dtype=float)
     mae = float(np.mean(np.abs(actual_arr - forecast_arr)))
@@ -39,19 +52,22 @@ def compute_metrics(actual: np.ndarray, forecast: Iterable[float]) -> Dict[str, 
     with np.errstate(divide='ignore', invalid='ignore'):
         percent_errors = np.abs((actual_arr - forecast_arr) / actual_arr) * 100
     mape = float(np.nanmean(percent_errors)) if np.isfinite(np.nanmean(percent_errors)) else float('nan')
+    mase_scale = _compute_mase_scale(train) if train is not None else None
+    mase = (mae / mase_scale) if mase_scale else None
     return {
         'mae': round(mae, 4),
         'rmse': round(rmse, 4),
         'mape': None if np.isnan(mape) else round(mape, 4),
+        'mase': None if mase is None else round(mase, 4),
     }
 
 
-def _normalize_model_payload(name: str, actual: np.ndarray, payload: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_model_payload(name: str, actual: np.ndarray, payload: Dict[str, Any], train: np.ndarray) -> Dict[str, Any]:
     mean = payload.get('mean', [])
     return {
         **payload,
         'name': name,
-        'metrics': compute_metrics(actual, mean) if mean else None,
+        'metrics': compute_metrics(actual, mean, train) if mean else None,
     }
 
 
@@ -106,9 +122,9 @@ def _run_model_metrics(
         _log(logs, 4, f'{prefix}Chronos failed: {exc}', log_callback)
 
     return {
-        'naive': _normalize_model_payload('Naive', actual, naive_payload),
-        'arima': _normalize_model_payload('ARIMA', actual, arima_payload),
-        'chronos': _normalize_model_payload('Chronos', actual, chronos_payload),
+        'naive': _normalize_model_payload('Naive', actual, naive_payload, train),
+        'arima': _normalize_model_payload('ARIMA', actual, arima_payload, train),
+        'chronos': _normalize_model_payload('Chronos', actual, chronos_payload, train),
     }
 
 

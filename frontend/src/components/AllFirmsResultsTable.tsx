@@ -55,8 +55,11 @@ export function AllFirmsResultsTable({ result }: Props) {
               <th>Obs.</th>
               <th>Best model</th>
               <th>Naive MAE</th>
+              <th>Naive MASE</th>
               <th>ARIMA MAE</th>
+              <th>ARIMA MASE</th>
               <th>Chronos MAE</th>
+              <th>Chronos MASE</th>
               <th>Notes</th>
             </tr>
           </thead>
@@ -70,8 +73,11 @@ export function AllFirmsResultsTable({ result }: Props) {
                 <td>{row.observations}</td>
                 <td>{row.bestModel ?? '—'}</td>
                 <td>{renderMetric(row.models.naive?.mae)}</td>
+                <td>{renderMetric(row.models.naive?.mase)}</td>
                 <td>{renderMetric(row.models.arima?.mae)}</td>
+                <td>{renderMetric(row.models.arima?.mase)}</td>
                 <td>{renderMetric(row.models.chronos?.mae)}</td>
+                <td>{renderMetric(row.models.chronos?.mase)}</td>
                 <td>{row.note ?? 'Metrics calculated successfully.'}</td>
               </tr>
             ))}

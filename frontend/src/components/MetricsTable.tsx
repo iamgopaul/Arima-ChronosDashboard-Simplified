@@ -53,6 +53,7 @@ export function MetricsTable({ models }: Props) {
               <th>Model</th>
               <th>Status</th>
               <th>MAE</th>
+              <th>MASE</th>
               <th>RMSE</th>
               <th>MAPE</th>
               <th>Notes</th>
@@ -65,6 +66,7 @@ export function MetricsTable({ models }: Props) {
                   <td>{row.name}</td>
                   <td>{row.status}</td>
                   <td>{row.metrics ? row.metrics.mae.toFixed(4) : '—'}</td>
+                  <td>{row.metrics?.mase != null ? row.metrics.mase.toFixed(4) : '—'}</td>
                   <td>{row.metrics ? row.metrics.rmse.toFixed(4) : '—'}</td>
                   <td>{row.metrics?.mape != null ? row.metrics.mape.toFixed(4) : '—'}</td>
                   <td>{getNote(row)}</td>

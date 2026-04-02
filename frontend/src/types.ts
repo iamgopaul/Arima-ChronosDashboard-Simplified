@@ -32,6 +32,7 @@ export type ModelMetrics = {
   mae: number;
   rmse: number;
   mape: number | null;
+  mase: number | null;
 };
 
 export type ModelResult = {
@@ -76,6 +77,7 @@ export type AllFirmMetrics = {
   mae: number;
   rmse: number;
   mape: number | null;
+  mase: number | null;
 };
 
 export type AllFirmsRunResponse = {
