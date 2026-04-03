@@ -39,8 +39,9 @@ const ANALYSIS_COMPLETE_PAUSE_MS = 900;
 const DATASET_TABLE_PAGE_SIZE = 200;
 const SINGLE_HISTORY_STORAGE_KEY = 'arima-chronos-single-history';
 const ALL_HISTORY_STORAGE_KEY = 'arima-chronos-all-history';
-const HISTORY_RESET_MARKER = 'arima-chronos-history-reset-20260403';
+const HISTORY_RESET_MARKER = 'arima-chronos-history-reset-20260404';
 const MAX_HISTORY_ITEMS = 8;
+const MAX_BATCH_ANALYSIS_LOGS = 250;
 type DashboardTab = 'upload' | 'all' | 'single';
 type AnalysisScope = 'all' | 'single';
 type AnalysisLogEntry = {
@@ -93,6 +94,18 @@ function createHistoryLog(message: string, stepIndex: number, timestamp = format
 
 function buildStepLogs() {
   return ANALYSIS_STEPS.map((step, index) => createHistoryLog(`Step ${index + 1}/${ANALYSIS_STEPS.length}: ${step}`, index));
+}
+
+function limitAnalysisLogs(entries: AnalysisLogEntry[], maxEntries = MAX_BATCH_ANALYSIS_LOGS) {
+  if (entries.length <= maxEntries) {
+    return entries;
+  }
+
+  const omittedCount = entries.length - maxEntries + 1;
+  return [
+    createHistoryLog(`Showing the most recent ${maxEntries - 1} backend log entries (${omittedCount} older entries omitted).`, 0),
+    ...entries.slice(-(maxEntries - 1)),
+  ];
 }
 
 function hasRestorableSavedView(entry: unknown): entry is AnalysisHistoryEntry {
@@ -258,7 +271,7 @@ function App() {
       return;
     }
 
-    setAnalysisLogs((current) => [
+    setAnalysisLogs((current) => limitAnalysisLogs([
       ...current,
       ...unseenLogs.map((entry, index) => ({
         id: `backend-${entry.timestamp}-${entry.stepIndex}-${index}-${current.length}`,
@@ -266,7 +279,7 @@ function App() {
         message: `[backend] ${entry.message}`,
         stepIndex: sanitizeStepIndex(entry.stepIndex),
       })),
-    ]);
+    ]));
   }, []);
 
   useEffect(() => {
@@ -554,7 +567,7 @@ function App() {
       );
 
       const elapsed = Date.now() - startedAt;
-      const historyLogs = [
+      const historyLogs = limitAnalysisLogs([
         createHistoryLog('Analysis started.', 0),
         ...buildStepLogs(),
         createHistoryLog(`Submitting all-firms forecast request for target "${targetColumn}" grouped by "${entityColumn}".`, 0),
@@ -564,7 +577,7 @@ function App() {
           `All-firms forecast response received. Processed ${jobStatus.result.summary.processedEntities} firm(s), skipped ${jobStatus.result.summary.skippedEntities}.`,
           ANALYSIS_STEPS.length - 1,
         ),
-      ];
+      ]);
       saveAnalysisHistory('all', {
         id: `all-${Date.now()}`,
         label: `${targetColumn} by ${entityColumn}`,

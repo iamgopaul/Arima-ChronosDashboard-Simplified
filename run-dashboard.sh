@@ -7,6 +7,7 @@ BACKEND_DIR="$ROOT_DIR/backend"
 FRONTEND_DIR="$ROOT_DIR/frontend"
 VENV_PYTHON="$ROOT_DIR/.venv/bin/python"
 VENV_UVICORN="$ROOT_DIR/.venv/bin/uvicorn"
+VENV_PIP="$ROOT_DIR/.venv/bin/pip"
 
 wait_for_port_clear() {
   local port="$1"
@@ -83,18 +84,30 @@ wait_for_backend_health() {
   return 1
 }
 
-if [[ ! -x "$VENV_PYTHON" || ! -x "$VENV_UVICORN" ]]; then
-  echo "Backend virtual environment not found. Expected at .venv/"
-  echo "Create it with:"
-  echo "  python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt"
-  exit 1
-fi
+ensure_backend_dependencies() {
+  if [[ ! -x "$VENV_PYTHON" ]]; then
+    echo "Creating backend virtual environment in .venv/"
+    python3 -m venv "$ROOT_DIR/.venv"
+  fi
 
-if [[ ! -d "$FRONTEND_DIR/node_modules" ]]; then
-  echo "Frontend dependencies are missing. Install them with:"
-  echo "  cd frontend && npm install"
-  exit 1
-fi
+  echo "Installing backend requirements"
+  "$VENV_PIP" install -r "$BACKEND_DIR/requirements.txt"
+
+  if [[ ! -x "$VENV_UVICORN" ]]; then
+    echo "Backend setup is incomplete: uvicorn is still unavailable in .venv/"
+    exit 1
+  fi
+}
+
+ensure_frontend_dependencies() {
+  echo "Installing frontend dependencies"
+  cd "$FRONTEND_DIR"
+  if [[ -f "$FRONTEND_DIR/package-lock.json" ]]; then
+    npm install
+  else
+    npm install
+  fi
+}
 
 cleanup() {
   if [[ -n "${BACKEND_PID:-}" ]]; then
@@ -106,6 +119,9 @@ cleanup() {
 }
 
 trap cleanup EXIT INT TERM
+
+ensure_backend_dependencies
+ensure_frontend_dependencies
 
 stop_port_listener 8000 "backend"
 stop_port_listener 5173 "frontend"

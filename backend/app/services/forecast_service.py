@@ -31,6 +31,9 @@ def _round_list(values: Iterable[float]) -> List[float]:
     return [round(float(value), 6) for value in values]
 
 
+ALL_FIRMS_PROGRESS_INTERVAL = 25
+
+
 def _compute_mase_scale(train: np.ndarray) -> float | None:
     train_arr = np.asarray(train, dtype=float)
     if len(train_arr) < 2:
@@ -79,9 +82,11 @@ def _run_model_metrics(
     *,
     log_callback: Callable[[int, str], None] | None = None,
     log_prefix: str = '',
+    emit_detailed_logs: bool = True,
 ) -> Dict[str, Any]:
     prefix = f'{log_prefix} ' if log_prefix else ''
-    _log(logs, 2, f"{prefix}Running naive baseline over {horizon} holdout period(s).", log_callback)
+    if emit_detailed_logs:
+        _log(logs, 2, f"{prefix}Running naive baseline over {horizon} holdout period(s).", log_callback)
     naive_payload = {
         'status': 'ok',
         'mean': _round_list(naive_forecast(train, horizon)),
@@ -90,25 +95,29 @@ def _run_model_metrics(
         'lo95': None,
         'hi95': None,
     }
-    _log(logs, 2, f'{prefix}Naive baseline completed successfully.', log_callback)
+    if emit_detailed_logs:
+        _log(logs, 2, f'{prefix}Naive baseline completed successfully.', log_callback)
 
-    _log(logs, 3, f'{prefix}Fitting ARIMA candidates and selecting the best order by AIC.', log_callback)
+    if emit_detailed_logs:
+        _log(logs, 3, f'{prefix}Fitting ARIMA candidates and selecting the best order by AIC.', log_callback)
     arima_payload = arima_forecast(train, horizon)
     order = arima_payload.get('order')
-    if order:
+    if emit_detailed_logs and order:
         _log(logs, 3, f"{prefix}ARIMA completed with order ({order['p']},{order['d']},{order['q']}).", log_callback)
-    else:
+    elif emit_detailed_logs:
         _log(logs, 3, f'{prefix}ARIMA completed successfully.', log_callback)
 
     try:
-        _log(logs, 4, f'{prefix}Loading Chronos-Bolt from the local cache and generating quantile forecasts.', log_callback)
+        if emit_detailed_logs:
+            _log(logs, 4, f'{prefix}Loading Chronos-Bolt from the local cache and generating quantile forecasts.', log_callback)
         chronos_payload = chronos_forecast(train, horizon)
-        _log(
-            logs,
-            4,
-            f"{prefix}Chronos completed successfully using model {chronos_payload.get('model', 'chronos')}.",
-            log_callback,
-        )
+        if emit_detailed_logs:
+            _log(
+                logs,
+                4,
+                f"{prefix}Chronos completed successfully using model {chronos_payload.get('model', 'chronos')}.",
+                log_callback,
+            )
     except Exception as exc:
         chronos_payload = {
             'status': 'error',
@@ -119,7 +128,8 @@ def _run_model_metrics(
             'lo95': None,
             'hi95': None,
         }
-        _log(logs, 4, f'{prefix}Chronos failed: {exc}', log_callback)
+        if emit_detailed_logs:
+            _log(logs, 4, f'{prefix}Chronos failed: {exc}', log_callback)
 
     return {
         'naive': _normalize_model_payload('Naive', actual, naive_payload, train),
@@ -192,7 +202,9 @@ def run_all_firms_forecast_suite(
         value = row[column]
         return None if pd.isna(value) else str(value)
 
-    for entity_value in entity_values:
+    total_entities = len(entity_values)
+
+    for entity_index, entity_value in enumerate(entity_values, start=1):
         firm_rows = df[df[entity_column].astype(str) == entity_value]
         firm_info = firm_rows.iloc[0]
         display_name = _cell(firm_info, 'tic') or _cell(firm_info, 'conm') or entity_value
@@ -204,12 +216,13 @@ def run_all_firms_forecast_suite(
         }
 
         try:
-            _log(
-                logs,
-                1,
-                f"[{processed_entities + skipped_entities + 1}/{len(entity_values)}] Preparing firm '{display_name}'.",
-                log_callback,
-            )
+            if entity_index <= 3 or entity_index % ALL_FIRMS_PROGRESS_INTERVAL == 0 or entity_index == total_entities:
+                _log(
+                    logs,
+                    1,
+                    f"[{entity_index}/{total_entities}] Preparing firm '{display_name}'.",
+                    log_callback,
+                )
             series_payload = extract_time_series(
                 df,
                 target_column=target_column,
@@ -227,15 +240,17 @@ def run_all_firms_forecast_suite(
                 None,
                 log_callback=log_callback,
                 log_prefix=f"[{display_name}]",
+                emit_detailed_logs=False,
             )
             processed_entities += 1
             best_model = _best_model_name(model_map)
-            _log(
-                logs,
-                4,
-                f"[{processed_entities}/{len(entity_values)}] Finished firm '{display_name}' with best model {best_model or 'n/a'}.",
-                log_callback,
-            )
+            if processed_entities <= 3 or processed_entities % ALL_FIRMS_PROGRESS_INTERVAL == 0 or entity_index == total_entities:
+                _log(
+                    logs,
+                    4,
+                    f"[{processed_entities}/{total_entities}] Finished firm '{display_name}' with best model {best_model or 'n/a'}.",
+                    log_callback,
+                )
             rows.append(
                 {
                     **row_base,
